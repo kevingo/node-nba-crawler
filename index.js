@@ -2,10 +2,11 @@
 
 var request = require('request');
 var moment = require('moment');
+var promise = require('bluebird');
 var twix = require('twix');
 var redis = require("redis"),
     client = redis.createClient();
-
+var start , end;
 
 function storeGameData (start, end, callback) {
 	start = moment(start).format();
@@ -14,28 +15,34 @@ function storeGameData (start, end, callback) {
 	var prefix = 'http://data.nba.com/data/5s/json/cms/noseason/scoreboard/';
 	var postfix = '/games.json';
 	var days = getRange(start, end, 'day', 'YYYYMMDD');
-
-	for (var i = 0 ; i<days.length ; i++) {
-		var url = prefix + days[i] + postfix;
-		getData(url, function(err, data) {
+	return promise.map(days, function(day) {
+		var url = prefix + day + postfix;
+		return getData(url)
+		.then(function(data) {
 			var key = 'nba-' + data.sports_meta.season_meta.calendar_date;
-			client.set(key, JSON.stringify(data), function(err, reply) {
-				if (err) {
-					console.log(err);
-				}
-				console.log('set ' + key + ' done.');
-			});
+			return client.set(key, JSON.stringify(data));
 		});
-	}
+	})
+	.then(function() {
+		console.log('done');
+		process.exit();
+	})
+	.catch(function(err) {
+		console.log(err);
+	});
 }
 
-function getData(url, callback) {
-	request(url, function (error, response, body) {
-		if (!error && response.statusCode == 200) {
+function getData(url) {
+	return new promise(function(resolve, reject) {
+		request(url, function (error, response, body) {
+			if (error) {
+				return reject(error);
+			}
+
 			var nba = JSON.parse(body);
 			var games = nba.sports_content;
-			return callback(null, games);
-		}
+			return resolve(games);
+		});
 	});
 }
 
@@ -51,4 +58,7 @@ function getRange(start, end, frequency, format) {
   return range;
 }
 
-storeGameData('20160401', '20160630');
+start = process.argv[2] || moment().format();
+end = process.argv[3] || moment().format();
+storeGameData(start, end);
+
