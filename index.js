@@ -4,13 +4,15 @@ var request = require('request');
 var moment = require('moment');
 var promise = require('bluebird');
 var twix = require('twix');
-var redis = require("redis"),
-    client = redis.createClient();
+var redis = require('redis');
+
+var client = redis.createClient('6379', 'redis');
 var start , end;
 
 function storeGameData (start, end, callback) {
 	start = moment(start).format();
 	end = moment(end).format();
+	console.log('Fetch data with ', start, end);
 
 	var prefix = 'http://data.nba.com/data/5s/json/cms/noseason/scoreboard/';
 	var postfix = '/games.json';
@@ -25,7 +27,6 @@ function storeGameData (start, end, callback) {
 	})
 	.then(function() {
 		console.log('done');
-		process.exit();
 	})
 	.catch(function(err) {
 		console.log(err);
@@ -60,5 +61,9 @@ function getRange(start, end, frequency, format) {
 
 start = process.argv[2] || moment().format();
 end = process.argv[3] || moment().format();
-storeGameData(start, end);
+var minutes = 5,
+		interval = minutes * 60 * 1000;
 
+setInterval(function() {
+	storeGameData(start, end);
+}, interval);
